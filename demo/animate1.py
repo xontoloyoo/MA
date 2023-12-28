@@ -182,54 +182,63 @@ class MagicAnimate():
 
             os.makedirs(savedir, exist_ok=True)
             save_videos_grid(samples_per_video, animation_path)
-            
             return animation_path
-            
-animator = MagicAnimate()
 
-def animate(reference_image, motion_sequence_state, seed, steps, guidance_scale):
-    return animator(reference_image, motion_sequence_state, seed, steps, guidance_scale)
-
-with gr.Blocks(title='AICoverGenWebUI') as app:
-  #gr.Label('AICoverGen WebUI created with ❤️', show_label=False)
-  animation = gr.Video(format="mp4", label="Animation Results", autoplay=True)
-  with gr.Row():
-    reference_image  = gr.Image(label="Reference Image")
-    motion_sequence  = gr.Video(format="mp4", label="Motion Sequence")
-    with gr.Column():
-            random_seed         = gr.Textbox(label="Random seed", value=1, info="default: -1")
-            sampling_steps      = gr.Textbox(label="Sampling steps", value=25, info="default: 25")
-            guidance_scale      = gr.Textbox(label="Guidance scale", value=7.5, info="default: 7.5")
-            submit              = gr.Button("Animate")
+# Kode Gradio
+with gr.Blocks(title='Magic Animate') as app:
+    gr.Label('MagicAnimate: Temporally Consistent Human Image Animation using Diffusion Model', show_label=False)
+    animation = gr.Video(format="mp4", label="Animation Results", autoplay=True)
+    with gr.Row():
+        reference_image = gr.Image(label="Reference Image")
+        motion_sequence = gr.Video(format="mp4", label="Motion Sequence")
+        with gr.Column():
+            random_seed = gr.Textbox(label="Random seed", value="1", info="default: -1")
+            sampling_steps = gr.Textbox(label="Sampling steps", value="25", info="default: 25")
+            guidance_scale = gr.Textbox(label="Guidance scale", value="7.5", info="default: 7.5")
+            file_reference = gr.Textbox(label="File Path Reference Image", placeholder="Enter file path")
+            file_motion = gr.Textbox(label="File Path Motion Sequence", placeholder="Enter file path")
+            submit = gr.Button("Animate")
+            refresh_button = gr.Button("Refresh")
 
     def read_video(video):
         reader = imageio.get_reader(video)
         fps = reader.get_meta_data()['fps']
+        video = imageio.get_reader(file_motion, fps=fps)
+        video = [np.array(frame) for frame in video]
         return video
     
-    def read_image(image, size=512):
-        return np.array(Image.fromarray(image).resize((size, size)))
+    def read_image(image):
+        if file_reference:
+          image = Image.open(file_reference)
+          image = np.array(image)
+          return image
+        else:
+          return None
+        
+# Tambahkan fungsi untuk merefresh gambar, video, dan animasi
+    def refresh():
+      reference_image.image(None)
+      motion_sequence.video(None)
+      animation.video(None)
+    refresh_button.click(refresh)
     
-    # when user uploads a new video
+
     motion_sequence.upload(
         read_video,
         motion_sequence,
         motion_sequence
     )
-    # when `first_frame` is updated
     reference_image.upload(
         read_image,
         reference_image,
         reference_image
     )
-    # when the `submit` button is clicked
     submit.click(
-        animate,
+        MagicAnimate(),
         [reference_image, motion_sequence, random_seed, sampling_steps, guidance_scale], 
         animation
     )
 
-    # Examples
     gr.Markdown("## Examples")
     gr.Examples(
         examples=[
@@ -242,10 +251,5 @@ with gr.Blocks(title='AICoverGenWebUI') as app:
         inputs=[reference_image, motion_sequence],
         outputs=animation,
     )
-#demo.launch(share=True)
-    app.launch(
-        share=True,
-        enable_queue=True,
-        #server_name=None if not args.listen else (args.listen_host or '0.0.0.0'),
-        #server_port=args.listen_port,
-    )
+
+app.queue(concurrency_count=511, max_size=1022).launch(share=True)
